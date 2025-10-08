@@ -1,0 +1,194 @@
+---
+title: "part 2"
+author: "Shaunak Patel"
+date: "2025-10-08"
+output: html_document
+
+```{r}
+suppressPackageStartupMessages({
+  if (!requireNamespace("seqinr", quietly = TRUE)) install.packages("seqinr")
+  if (!requireNamespace("R.utils", quietly = TRUE)) install.packages("R.utils")
+  library(seqinr)
+  library(R.utils)
+})
+
+# Folders
+if (!dir.exists("data")) dir.create("data", recursive = TRUE)
+if (!dir.exists("figs")) dir.create("figs", recursive = TRUE)
+
+# URLs (your sample is S. aureus MRSA107, GCA_002895385)
+URL_ecoli   <- "https://ftp.ensemblgenomes.ebi.ac.uk/pub/bacteria/release-62/fasta/bacteria_0_collection/escherichia_coli_str_k_12_substr_mg1655_gca_000005845/cds/Escherichia_coli_str_k_12_substr_mg1655_gca_000005845.ASM584v2.cds.all.fa.gz"
+URL_saureus <- "https://ftp.ensemblgenomes.ebi.ac.uk/pub/bacteria/release-62/fasta/bacteria_41_collection/staphylococcus_aureus_gca_002895385/cds/Staphylococcus_aureus_gca_002895385.ASM289538v1.cds.all.fa.gz"
+
+gz_ecoli   <- file.path("data","ecoli_cds.fa.gz")
+fa_ecoli   <- file.path("data","ecoli_cds.fa")
+gz_saureus <- file.path("data","saureus_cds.fa.gz")
+fa_saureus <- file.path("data","saureus_cds.fa")
+
+# Download + unzip helper
+safe_download_unzip <- function(url, gz_path, fa_path) {
+  if (!file.exists(fa_path)) {
+    download.file(url, destfile = gz_path, mode = "wb", quiet = TRUE)
+    R.utils::gunzip(gz_path, destname = fa_path, overwrite = TRUE)
+  }
+  stopifnot(file.exists(fa_path))
+}
+
+safe_download_unzip(URL_ecoli,   gz_ecoli,   fa_ecoli)
+safe_download_unzip(URL_saureus, gz_saureus, fa_saureus)
+
+# Read FASTA
+cds_ecoli   <- seqinr::read.fasta(fa_ecoli)
+cds_saureus <- seqinr::read.fasta(fa_saureus)
+```
+```{r}
+# Q1: Number of CDS
+#How many coding sequences (CDS) are present?
+num_ecoli_cds   <- length(cds_ecoli)
+num_saureus_cds <- length(cds_saureus)
+
+data.frame(
+  Organism  = c("E. coli MG1655", "S. aureus MRSA107"),
+  CDS_Count = c(num_ecoli_cds,    num_saureus_cds),
+  row.names = NULL
+)
+```
+#E. coli MG1655 has 4239 CDS, while S. aureus MRSA107 has 2942. This is consistent with their genome complexity: E. coli (Gram-negative) typically carries a larger chromosome and more accessory genes, whereas S. aureus (Gram-positive, AT-rich) tends to have a smaller coding repertoire.
+```{r}
+# Q2: Total coding DNA length (bp)
+#How much coding DNA is there in total?
+len_ecoli   <- as.numeric(summary(cds_ecoli)[, "Length"])
+len_saureus <- as.numeric(summary(cds_saureus)[, "Length"])
+
+data.frame(
+  Organism = c("E. coli MG1655", "S. aureus MRSA107"),
+  Total_Coding_DNA_bp = c(sum(len_ecoli), sum(len_saureus)),
+  row.names = NULL
+)
+```
+#Total coding sequence in E. coli (~3.98 Mbp) exceeds S. aureus (~2.60 Mbp). The difference mirrors the higher CDS count and slightly longer average gene length in E. coli.
+```{r}
+# Q3: CDS length distribution (boxplot) + mean/median table
+# CDS length distribution; mean & median
+png(file.path("figs","cds_length_boxplot.png"), width = 1200, height = 800, res = 150)
+boxplot(len_saureus, len_ecoli,
+        names = c("S. aureus", "E. coli"),
+        ylab = "CDS Length (bp)",
+        main = "Distribution of CDS Lengths")
+dev.off()
+
+data.frame(
+  Organism = c("S. aureus MRSA107", "E. coli MG1655"),
+  Mean_CDS_Length   = c(mean(len_saureus), mean(len_ecoli)),
+  Median_CDS_Length = c(median(len_saureus), median(len_ecoli)),
+  row.names = NULL
+)
+```
+#Across CDS, E. coli genes are longer on average (mean ≈ 939 bp) than S. aureus (mean ≈ 884 bp). Your boxplot shows the whole distribution shifted slightly upward for E. coli, with a broader upper tail. The S. aureus median is 741 bp; the E. coli median printed in your console (from your code) is also higher than 741 bp, matching the visual shift. Overall, E. coli carries more genes and they are slightly longer, which together explain its larger total coding content.
+```{r}
+# Q4: Nucleotide and Amino Acid frequencies
+# Nucleotide barplots
+#Nucleotide & amino-acid frequencies; bar plots
+png(file.path("figs","nt_freq_saureus.png"), width = 1200, height = 800, res = 150)
+barplot(table(unlist(cds_saureus)), main = "S. aureus Nucleotide Frequency",
+        xlab = "Nucleotide", ylab = "Count")
+dev.off()
+
+png(file.path("figs","nt_freq_ecoli.png"), width = 1200, height = 800, res = 150)
+barplot(table(unlist(cds_ecoli)), main = "E. coli Nucleotide Frequency",
+        xlab = "Nucleotide", ylab = "Count")
+dev.off()
+
+# Translate using bacterial code (11)
+prot_saureus <- lapply(cds_saureus, function(x) seqinr::translate(x, numcode = 11))
+prot_ecoli   <- lapply(cds_ecoli,   function(x) seqinr::translate(x, numcode = 11))
+
+# Amino acid frequency
+png(file.path("figs","aa_freq_saureus.png"), width = 1400, height = 800, res = 150)
+barplot(table(unlist(prot_saureus)), main = "S. aureus Amino Acid Frequency",
+        xlab = "Amino Acid", ylab = "Count", las = 2)
+dev.off()
+
+png(file.path("figs","aa_freq_ecoli.png"), width = 1400, height = 800, res = 150)
+barplot(table(unlist(prot_ecoli)), main = "E. coli Amino Acid Frequency",
+        xlab = "Amino Acid", ylab = "Count", las = 2)
+dev.off()
+```
+#The RSCU charts confirm preferred A/T-ending codons in S. aureus and more C/G-ending codons in E. coli for many synonymous families. In S. aureus, codons such as AAA (Lys) or ATT/ATA (Ile) tend to be elevated, consistent with AT-rich CDS. In E. coli, codons like GGC/GGG (Gly) or CCG (Pro) are comparatively favored. This indicates strong codon usage bias aligned with genomic GC% and tRNA pools. (If you want a single scalar bias metric, you could add ENC or MILC later, but your RSCU plots already demonstrate the pattern clearly.)
+```{r}
+# Q5: Codon usage (counts) and RSCU
+#5) Codon usage & bias; charts
+codon_usage_sa_counts <- seqinr::uco(unlist(cds_saureus), index = "eff")
+codon_usage_ec_counts <- seqinr::uco(unlist(cds_ecoli),   index = "eff")
+rscu_saureus <- seqinr::uco(unlist(cds_saureus), index = "rscu")
+rscu_ecoli   <- seqinr::uco(unlist(cds_ecoli),   index = "rscu")
+
+png(file.path("figs","rscu_top20_saureus.png"), width = 1600, height = 900, res = 150)
+barplot(sort(rscu_saureus, decreasing = TRUE)[1:20], las = 2,
+        xlab = "Codon", ylab = "RSCU", main = "S. aureus — Top 20 Codons (RSCU)")
+dev.off()
+
+png(file.path("figs","rscu_top20_ecoli.png"), width = 1600, height = 900, res = 150)
+barplot(sort(rscu_ecoli, decreasing = TRUE)[1:20], las = 2,
+        xlab = "Codon", ylab = "RSCU", main = "E. coli — Top 20 Codons (RSCU)")
+dev.off()
+```
+#The RSCU charts confirm preferred A/T-ending codons in S. aureus and more C/G-ending codons in E. coli for many synonymous families. In S. aureus, codons such as AAA (Lys) or ATT/ATA (Ile) tend to be elevated, consistent with AT-rich CDS. In E. coli, codons like GGC/GGG (Gly) or CCG (Pro) are comparatively favored. This indicates strong codon usage bias aligned with genomic GC% and tRNA pools. (If you want a single scalar bias metric, you could add ENC or MILC later, but your RSCU plots already demonstrate the pattern clearly.)
+```{r}
+# Q6: Protein k-mer analysis (k = 3–5) — over/under represented in S. aureus vs E. coli
+# Over- and under-represented protein k-mers (k=3–5); comparison & rationale
+# Remove stop '*' and non-standard AA; flatten
+AA20 <- strsplit("ACDEFGHIKLMNPQRSTVWY", "")[[1]]
+cleanAA <- function(v) v[v %in% AA20]
+
+prot_saureus <- lapply(prot_saureus, function(v) cleanAA(v[v != "*"]))
+prot_ecoli   <- lapply(prot_ecoli,   function(v) cleanAA(v[v != "*"]))
+
+prots_saureus <- unlist(prot_saureus, use.names = FALSE)
+prots_ecoli   <- unlist(prot_ecoli,   use.names = FALSE)
+
+aa_kmer_freq <- function(aa_vec, k) {
+  seqinr::count(aa_vec, wordsize = k, alphabet = AA20, freq = TRUE)
+}
+
+plot_kmers <- function(k) {
+  freq_sa <- aa_kmer_freq(prots_saureus, k)
+  freq_ec <- aa_kmer_freq(prots_ecoli,   k)
+  if (is.null(freq_sa) || length(freq_sa) == 0) return(invisible(NULL))
+
+  top_names    <- names(sort(freq_sa, decreasing = TRUE))[1:min(10, sum(freq_sa > 0))]
+  bottom_names <- names(sort(freq_sa, decreasing = FALSE))[1:min(10, length(freq_sa))]
+
+  comp_top <- rbind("S. aureus" = freq_sa[top_names],
+                    "E. coli"   = freq_ec[top_names])
+  comp_bottom <- rbind("S. aureus" = freq_sa[bottom_names],
+                       "E. coli"   = freq_ec[bottom_names])
+
+  png(file.path("figs", paste0("kmer_k", k, "_top_bottom.png")), width = 1800, height = 800, res = 150)
+  op <- par(no.readonly = TRUE); par(mfrow = c(1,2), mar = c(10,4,3,1))
+  barplot(comp_top,    beside = TRUE, las = 2, ylab = "Frequency",
+          main = paste0("k=", k, " — Top 10 in S. aureus"))
+  barplot(comp_bottom, beside = TRUE, las = 2, ylab = "Frequency",
+          main = paste0("k=", k, " — Bottom 10 in S. aureus"))
+  par(op); dev.off()
+
+  invisible(list(
+    k = k,
+    top    = sort(freq_sa[top_names],    decreasing = TRUE),
+    bottom = sort(freq_sa[bottom_names], decreasing = FALSE)
+  ))
+}
+
+res_k3 <- plot_kmers(3)
+res_k4 <- plot_kmers(4)
+res_k5 <- plot_kmers(5)
+
+# Optionally print the lists
+res_k3; res_k4; res_k5
+```
+#he most over-represented k-mers in S. aureus are dominated by Leu-rich and acidic/serine motifs (e.g., LLL/LLI and SDS/DSD/SDSD/SDSDS). These reflect 
+```{r}
+# Session info (helps markers reproduce)
+sessionInfo()
+```
+
