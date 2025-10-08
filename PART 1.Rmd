@@ -1,0 +1,106 @@
+---
+title: "Assignment part A"
+author: "Shaunak Patel"
+date: "2025-10-08"
+output: html_document
+---
+```{r}
+# Download inputs from the assignment repo (tip: 'view raw' then copy URL) 
+download.file("https://github.com/ghazkha/Assessment4/raw/main/gene_expression.tsv",
+              destfile = "gene_expression.tsv", quiet = TRUE)
+
+download.file("https://github.com/ghazkha/Assessment4/raw/main/growth_data.csv",
+              destfile = "growth_data.csv", quiet = TRUE)
+```
+
+
+```{r}
+# Q1: read TSV, gene IDs as row names
+gene_data <- read.table("gene_expression.tsv",
+                        header = TRUE,
+                        row.names = 1,
+                        sep = "\t")
+head(gene_data)  # first six genes
+```
+```{r}
+# Q2: add mean of the other (numeric) columns
+num_cols <- sapply(gene_data, is.numeric)
+gene_data$mean_expression <- rowMeans(gene_data[, num_cols, drop = FALSE])
+head(gene_data)
+```
+```{r}
+# Q3: Top 10 by mean
+sorted_genes <- gene_data[order(-gene_data$mean_expression), ]
+top_10_genes <- head(sorted_genes, 10)
+top_10_genes
+
+```
+```{r}
+# Q4: Count genes with mean < 10
+sum(gene_data$mean_expression < 10)
+
+```
+```{r}
+# Q5: Histogram of mean values
+hist(gene_data$mean_expression,
+     xlab = "Mean Expression",
+     ylab = "Frequency",
+     main = "Distribution of Mean Gene Expression",
+     breaks = 30)
+
+```
+```{r}
+# Q6: Read the growth CSV
+growth_data <- read.csv("growth_data.csv")
+colnames(growth_data)
+
+
+```
+```{r}
+str(growth_data)
+
+```
+```{r}
+# Q7: Mean and SD at start (2005) and end (2020) 
+mean_start <- tapply(growth_data$Circumf_2005_cm, growth_data$Site, mean)
+sd_start   <- tapply(growth_data$Circumf_2005_cm, growth_data$Site, sd)
+mean_end   <- tapply(growth_data$Circumf_2020_cm, growth_data$Site, mean)
+sd_end     <- tapply(growth_data$Circumf_2020_cm, growth_data$Site, sd)
+
+data.frame(
+  Site = names(mean_start),
+  Mean_2005 = as.numeric(mean_start),
+  SD_2005   = as.numeric(sd_start),
+  Mean_2020 = as.numeric(mean_end),
+  SD_2020   = as.numeric(sd_end),
+  row.names = NULL
+)
+```
+```{r}
+# Q8: Boxplot — start vs end of study (2005 vs 2020) at both sites  
+boxplot(
+  growth_data$Circumf_2005_cm[growth_data$Site == "northeast"],
+  growth_data$Circumf_2020_cm[growth_data$Site == "northeast"],
+  growth_data$Circumf_2005_cm[growth_data$Site == "southwest"],
+  growth_data$Circumf_2020_cm[growth_data$Site == "southwest"],
+  names = c("Northeast 2005", "Northeast 2020", "Southwest 2005", "Southwest 2020"),
+  ylab = "Tree Circumference (cm)",
+  main = "Tree Growth (Start vs End of Study)"
+)
+```
+```{r}
+# Q9: Mean 10-year growth by site (2010 → 2020)
+growth_data$growth_10yr <- growth_data$Circumf_2020_cm - growth_data$Circumf_2010_cm
+northeast_growth_mean <- mean(growth_data$growth_10yr[growth_data$Site == "northeast"], na.rm = TRUE)
+southwest_growth_mean <- mean(growth_data$growth_10yr[growth_data$Site == "southwest"], na.rm = TRUE)
+c(Northeast_mean_10yr = northeast_growth_mean,
+  Southwest_mean_10yr = southwest_growth_mean)
+```
+```{r}
+# Q10: t-test on 10-year growth 
+df <- na.omit(growth_data[, c("Site", "growth_10yr")])
+
+t_res <- t.test(growth_10yr ~ Site, data = df)  
+t_res
+```
+
